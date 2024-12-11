@@ -1,0 +1,11 @@
+- name: Add Cilium helm repository
+  kubernetes.core.helm_repository:
+    name: Cilium
+    repo_url: https://helm.cilium.io/
+
+- name: Deploy Cilium using Helm
+  kubernetes.core.helm:
+    name: cilium
+    release_namespace: kube-system
+    chart_ref: cilium/cilium
+    values_files: ["values/values.yaml"]

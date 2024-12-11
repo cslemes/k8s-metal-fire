@@ -1,0 +1,48 @@
+- name: Setup Kubernetes cluster
+  hosts: all
+  become: true
+  tasks:
+    - name: Install Kubernetes dependencies
+      import_role:
+        name: k8s_environment
+
+- name: Configure Firecracker
+  hosts: all
+  become: true
+  tasks:
+    - name: Configure Firecracker
+      import_role:
+        name: k8s_firecracker
+
+- name: Bootstrap Kubernetes cluster
+  hosts: k8s_master
+  become: true
+  tasks:
+    - name: Bootstrap cluster
+      import_role:
+        name: k8s_bootstrap
+
+- name: Apply Kata manifests
+  hosts: k8s_master
+  become: true
+  tasks:
+    - name: Apply Kata
+      import_role:
+        name: apply_kata
+
+- name: Join worker nodes
+  hosts: k8s_workers
+  become: true
+  tasks:
+    - name: Join cluster
+      command: "{{ hostvars[groups['k8s_master'][0]]['join_command'] }}"
+      args:
+        creates: /etc/kubernetes/kubelet.conf
+
+- name: Add Argo
+  hosts: k8s_master
+  become: true
+  tasks:
+    - name: Add Argo
+      import_role:
+        name: argocd

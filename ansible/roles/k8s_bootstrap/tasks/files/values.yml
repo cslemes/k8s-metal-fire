@@ -1,0 +1,31 @@
+operator:
+  replicas: 1
+
+kubeProxyReplacement: true
+
+ingressController:
+  enabled: true
+  loadbalancerMode: dedicated
+## TODO Pass dynamic IP
+k8sServiceHost: 147.28.229.189
+k8sServicePort: 6443
+
+l2announcements:
+  enabled: true
+
+devices: bond+
+
+externalIPs:
+  enabled: true
+
+externalTrafficPolicy: Cluster
+
+internalTrafficPolicy: Cluster
+
+hubble:
+  relay:
+    enabled: true
+  ui:
+    enabled: true
+  tls:
+    enabled: false

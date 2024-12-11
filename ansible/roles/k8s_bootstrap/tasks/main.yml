@@ -1,0 +1,48 @@
+---
+- name: Get the IP address of the master node
+  set_fact:
+    advertise_address: "{{ ansible_default_ipv4.address }}"
+    # advertise_address: "10.70.191.131"
+- name: Initialize Kubernetes cluster
+  command: kubeadm init --skip-phases=addon/kube-proxy --pod-network-cidr=10.244.0.0/16 --apiserver-advertise-address {{ advertise_address }}
+  register: kubeadm_init
+  args:
+    creates: /etc/kubernetes/admin.conf
+- name: Create .kube directory
+  file:
+    path: /root/.kube
+    state: directory
+    mode: "0644"
+- name: Copy admin.conf to root's kube config
+  copy:
+    src: /etc/kubernetes/admin.conf
+    dest: /root/.kube/config
+    remote_src: yes
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Get join command
+  command: kubeadm token create --print-join-command
+  register: join_command
+- name: Store join command
+  set_fact:
+    join_command: "{{ join_command.stdout }}"
+
+- name: Add Cilium Helm repository
+  kubernetes.core.helm_repository:
+    name: cilium
+    repo_url: https://helm.cilium.io/
+
+- name: Copy values file
+  ansible.builtin.copy:
+    src: files/values.yaml
+    dest: /tmp
+
+- name: Deploy Cilium using Helm
+  kubernetes.core.helm:
+    name: cilium
+    release_namespace: kube-system
+    chart_ref: cilium/cilium
+    values_files:
+      - /tmp/values.yaml

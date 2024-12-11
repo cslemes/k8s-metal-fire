@@ -1,0 +1,90 @@
+---
+- name: Download Firecracker
+  ansible.builtin.get_url:
+    url: https://github.com/firecracker-microvm/firecracker/releases/download/v1.10.1/firecracker-v1.10.1-x86_64.tgz
+    dest: /tmp/firecracker.tgz
+
+- name: Extract Firecracker
+  ansible.builtin.unarchive:
+    src: /tmp/firecracker.tgz
+    dest: /tmp
+    remote_src: yes
+
+- name: Copy Firecracker to /usr/bin
+  ansible.builtin.copy:
+    src: /tmp/release-v1.10.1-x86_64/firecracker-v1.10.1-x86_64
+    dest: /usr/bin/firecracker
+    mode: 0755
+    remote_src: yes
+
+- name: Create DevMapper directories
+  ansible.builtin.file:
+    path: /var/lib/containerd/io.containerd.snapshotter.v1.devmapper
+    state: directory
+    mode: "0755"
+
+- name: Move and set permissions for DevMapper scripts
+  ignore_errors: true
+  ansible.builtin.copy:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    mode: "0755"
+  with_items:
+    - {
+        src: scripts/devmapper/create.sh,
+        dest: /usr/local/bin/devmapper-create.sh,
+      }
+    - {
+        src: scripts/devmapper/reload.sh,
+        dest: /usr/local/bin/devmapper-reload.sh,
+      }
+
+- name: Run initial DevMapper creation script
+  ansible.builtin.command: /usr/local/bin/devmapper-create.sh
+  ignore_errors: true
+
+- name: Containerd Configuration Firecracker
+  ansible.builtin.shell: |
+    CONFIG_FILE="/etc/containerd/config.toml"
+    sudo cp "$CONFIG_FILE" "${CONFIG_FILE}.bak"
+
+    sudo sed -i '/\[plugins."io.containerd.snapshotter.v1.devmapper"\]/,/^$/d' "$CONFIG_FILE"
+    sudo sed -i '/\[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata-fc\]/,/^$/d' "$CONFIG_FILE"
+
+    cat <<EOF >> /etc/containerd/config.toml
+    [plugins."io.containerd.snapshotter.v1.devmapper"]
+    pool_name = "devpool"
+    root_path = "/var/lib/containerd/io.containerd.snapshotter.v1.devmapper"
+    base_image_size = "40GB"
+
+    [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata-fc]
+    snapshotter = "devmapper"
+    runtime_type = "io.containerd.kata-fc.v2"
+    EOF
+
+- name: Create DevMapper reload systemd service
+  copy:
+    dest: /lib/systemd/system/devmapper-reload.service
+    content: |
+      [Unit]
+      Description=Devmapper reload script
+      After=network.target
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/bin/devmapper-reload.sh
+      RemainAfterExit=yes
+
+      [Install]
+      WantedBy=multi-user.target
+
+- name: Enable and reload systemd daemon
+  systemd:
+    name: devmapper-reload.service
+    enabled: yes
+    daemon_reload: yes
+
+- name: Restart containerd
+  systemd:
+    name: containerd.service
+    state: restarted

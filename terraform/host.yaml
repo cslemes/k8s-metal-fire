@@ -1,0 +1,12 @@
+all:
+  children:
+    k8s_master:
+      hosts:
+        node1:
+          ansible_host: 147.75.45.67
+          ansible_user: root
+    workers:
+      hosts:
+        node:
+          ansible_host: 147.28.197.223
+          ansible_user: root
