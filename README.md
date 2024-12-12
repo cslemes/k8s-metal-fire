@@ -1,5 +1,8 @@
+
+
+
+**Ferramentas Utilizadas**
 - Cilium
-- ArgoCD
 - Terraform
 - Ansible
 - Equinix Metal
@@ -74,6 +77,7 @@ Siga as instruções abaixo para criar os arquivos e configurar a infraestrutura
 	    📄providers.tf
 	    📄 terraform.tfvars
 	    📄 variables.tf
+		📝inventory.sh
 	📂 ansible/    
 	 ...
 
@@ -296,6 +300,42 @@ terraform init      # Inicializa o projeto
 terraform plan      # Exibe o plano de execução
 terraform apply     # Aplica as configurações e provisiona os recursos
 ```
+
+**7. Crie o aruivo inventory.sh**
+- Esse script vai pegar o output do terraform e gerar o arquivo de inventory para o ansible.
+```bash
+terraform output -json | jq -r '
+  .master_ips.value as $masters |
+  .worker_ips.value as $workers |
+  {
+    all: {
+      children: {
+        k8s_master: {
+          hosts: (
+            $masters | to_entries | map({
+              (.key): {
+                ansible_host: .value.public_ip,
+                ansible_user: "root"
+              }
+            }) | add
+          )
+        },
+        k8s_workers: {
+          hosts: (
+            $workers | to_entries | map({
+              (.key): {
+                ansible_host: .value.public_ip,
+                ansible_user: "root"
+              }
+            }) | add
+          )
+        }
+      }
+    }
+  }
+' | yq -P > ../ansible/hosts.yaml
+```
+
 
 ### Criando manifestos Ansible para configuração do cluster Kubernetes
 
@@ -710,5 +750,119 @@ ansible-playbook -i hosts.yml playbook.yml
 - **Execução**: O comando `ansible-playbook` aplica todas as tarefas nos servidores.
 
 
+### Rodando tudo junto
 
+1. Crie um arquivo make file.
+```bash
+.PHONY: all init plan apply destroy ansible-lint terraform-lint ansible-deploy help
 
+# Directories
+TERRAFORM_DIR := terraform
+ANSIBLE_DIR := ansible
+
+# Default target
+all: init plan apply create-inventory ansible-deploy
+	@echo "Complete deployment finished successfully!"
+
+help:
+	@echo "Available targets:"
+	@echo "  init           - Initialize Terraform"
+	@echo "  plan           - Create Terraform plan"
+	@echo "  apply          - Apply Terraform changes"
+	@echo "  destroy        - Destroy Terraform infrastructure"
+	@echo "  create-inventory - Generate Ansible inventory from Terraform outputs"
+	@echo "  ansible-lint   - Run Ansible linter"
+	@echo "  ansible-deploy - Run Ansible playbook"
+	@echo "  terraform-lint - Run Terraform formatting and validation"
+	@echo
+	@echo "Example usage:"
+	@echo "  make all       - Runs init, plan, apply, inventory, and ansible-deploy"
+
+# Terraform targets
+init:
+	cd $(TERRAFORM_DIR) && terraform init
+
+plan:
+	cd $(TERRAFORM_DIR) && terraform plan
+
+apply:
+	cd $(TERRAFORM_DIR) && terraform apply -auto-approve
+
+destroy:
+	cd $(TERRAFORM_DIR) && terraform destroy -auto-approve
+
+# Generate Ansible inventory
+create-inventory:
+	cd $(TERRAFORM_DIR) && ./inventory.sh
+
+# Ansible targets
+ansible-lint:
+	ansible-lint $(ANSIBLE_DIR)/
+
+ansible-deploy:
+	ansible-playbook -i $(ANSIBLE_DIR)/hosts.yml $(ANSIBLE_DIR)/playbook.yml
+
+# Terraform linting and validation
+terraform-lint:
+	cd $(TERRAFORM_DIR) && terraform fmt -check && terraform validate
+
+```
+
+Este Makefile automatiza o processo de gerenciamento de infraestrutura com Terraform e Ansible, organizando os comandos em alvos específicos para facilitar o uso e manutenção. Aqui está um resumo das principais funcionalidades:
+
+1. **Alvo Principal (`all`)**:  
+    Executa todo o pipeline, incluindo `init`, `plan`, `apply`, criação do inventário (`create-inventory`) e a execução do playbook Ansible.
+    
+2. **Gerenciamento com Terraform**:
+    
+    - `init`: Inicializa o Terraform.
+    - `plan`: Gera o plano de execução.
+    - `apply`: Aplica as alterações na infraestrutura.
+    - `destroy`: Destroi a infraestrutura provisionada.
+3. **Inventário Dinâmico**:
+    
+    - `create-inventory`: Gera o inventário do Ansible com base na saída do Terraform.
+4. **Ansible**:
+    
+    - `ansible-lint`: Executa o linter para validar os playbooks.
+    - `ansible-deploy`: Executa o playbook principal (`site.yml`).
+5. **Linting e Validação de Terraform**:
+    
+    - `terraform-lint`: Valida a formatação e os arquivos de configuração do Terraform.
+6. **Ajuda (`help`)**:  
+    Exibe os alvos disponíveis e um exemplo de uso.
+
+### Teste
+
+1. Crie um manifesto para um nginx 
+2. Adicione **runtimeClassName: kata-fc** em specs.
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: null
+  labels:
+    run: nginx1
+  name: nginx1
+spec:
+  runtimeClassName: kata-fc
+  containers:
+  - image: nginx
+    name: nginx1
+    resources: {}
+  dnsPolicy: ClusterFirst
+  restartPolicy: Always
+status: {}
+```
+
+3. Verifique a versão do kernel do container
+```bash
+$ k exec -it nginx1 -- bash -c "uname -a"
+Linux nginx1 6.1.62 #1 SMP Fri Nov 15 11:22:02 UTC 2024 x86_64 GNU/Linux
+```
+4. E o kernel do host
+```bash
+root@k8s-master-1:~# uname -a
+Linux k8s-master-1 6.8.0-49-generic #49-Ubuntu SMP PREEMPT_DYNAMIC Mon Nov  4 02:06:24 UTC 2024 x86_64 x86_64 x86_64 GNU/Linux
+```

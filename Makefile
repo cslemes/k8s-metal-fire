@@ -37,7 +37,7 @@ destroy:
 
 # Generate Ansible inventory
 create-inventory:
-	cd $(TERRAFORM_DIR) && ./inventory.sh
+	cd $(TERRAFORM_DIR) && pwsh ./inventory.ps1
 
 # Ansible targets
 ansible-lint:

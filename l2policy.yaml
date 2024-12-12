@@ -1,0 +1,22 @@
+apiVersion: "cilium.io/v2alpha1"
+kind: CiliumLoadBalancerIPPool
+metadata:
+  name: "general-pool"
+spec:
+  blocks:
+    # Your specific Equinix Metal public IP range
+    - start: "145.40.76.216"
+      stop: "145.40.76.219"
+
+---
+apiVersion: "cilium.io/v2alpha1"
+kind: CiliumL2AnnouncementPolicy
+metadata:
+  name: equinix-public-l2-policy
+spec:
+  interfaces:
+    # Match Equinix Metal public network interfaces
+    - ^bond0$ # Typically the primary public interface
+    - ^eth0$ # Fallback interface
+  externalIPs: true
+  loadBalancerIPs: true

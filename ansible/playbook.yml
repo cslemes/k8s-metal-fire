@@ -38,11 +38,3 @@
       command: "{{ hostvars[groups['k8s_master'][0]]['join_command'] }}"
       args:
         creates: /etc/kubernetes/kubelet.conf
-
-- name: Add Argo
-  hosts: k8s_master
-  become: true
-  tasks:
-    - name: Add Argo
-      import_role:
-        name: argocd
