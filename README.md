@@ -1,5 +1,12 @@
+## Introdução
 
+Containers revolucionaram a forma como implantamos e gerenciamos aplicações, oferecendo portabilidade, escalabilidade e eficiência no uso de recursos. No entanto, apesar dessas vantagens, containers tradicionais não são projetados para fornecer isolamento total entre cargas de trabalho. Eles compartilham o kernel do sistema operacional do host, o que significa que, em cenários de ataque, vulnerabilidades no kernel ou nos próprios mecanismos de conteinerização, como namespaces e cgroups, podem ser exploradas para comprometer o ambiente do host ou outros containers.
 
+Além disso, ataques como _container escape_ permitem que um invasor rompa as barreiras de isolamento e obtenha acesso a recursos do host. Essa preocupação é ainda mais relevante em ambientes multi-tenant, onde múltiplas cargas de trabalho de diferentes equipes ou clientes podem estar sendo executadas lado a lado.
+
+Por conta dessas limitações, surge a necessidade de soluções mais robustas para isolamento de cargas de trabalho. Tecnologias como Kata Containers e Firecracker oferecem maior segurança ao combinarem a leveza dos containers com o isolamento robusto de máquinas virtuais (VMs), criando uma camada adicional de proteção sem sacrificar a eficiência operacional.
+
+Neste guia, exploraremos como integrar essas tecnologias ao Kubernetes para isolar cargas de trabalho de forma eficaz, reduzindo riscos de segurança em ambientes sensíveis.
 
 **Ferramentas Utilizadas**
 - Cilium
@@ -58,6 +65,7 @@ os requisitos são mínimo 2 servidores com 2CPU e 4GB de Ram .
 
 **1. Crie uma conta na  [Equinix Metal](https://console.equinix.com/) , ou caso já tenha faça login.**
 - No momento eles estão oferendo um crédito de $250,00 para testar a plataforma, o suficiente para seguir esse tutorial. O uso é cobrado por hora em instancias on demand, com cobrança mínima de 1 hora (Não adianta desligar depois de 1 minuto, vai cobrar 1 hora).
+
 **2. Crie uma chave de API para acessar a Equinix.**
 - No console da equinix, selecione o projeto em qual você vai criar suas maquinas, vá em project settings, e em api keys, adicione uma chave com permissão readwrite. 
 
@@ -70,16 +78,16 @@ Siga as instruções abaixo para criar os arquivos e configurar a infraestrutura
 
 **1. Estrutura de Arquivos**
 
-📂k8s-metal-fire/
-	📂 terraform/
-	    📄main.tf
-	    📄output.tf
-	    📄providers.tf
-	    📄 terraform.tfvars
-	    📄 variables.tf
-		📝inventory.sh
-	📂 ansible/    
-	 ...
+📂 k8s-metal-fire/
+├── 📂 terraform/ 
+│ ├── 📄 main.tf
+│ ├── 📄 output.tf 
+│ ├── 📄 providers.tf
+│ ├── 📄 terraform.tfvars
+│ ├── 📄 variables.tf 
+│ └── 📝 inventory.sh
+├── 📂 ansible/
+....
 
 Crie a estrutura de pastas e arquivos. Use os comandos abaixo:
 
@@ -134,7 +142,7 @@ resource "equinix_metal_device" "k8s_worker" {
 
 ---
 
-***3. Crie o arquivo `output.tf`**
+**3. Crie o arquivo `output.tf`**
 
 Esse arquivo define as saídas dos recursos provisionados.
 
@@ -301,7 +309,7 @@ terraform plan      # Exibe o plano de execução
 terraform apply     # Aplica as configurações e provisiona os recursos
 ```
 
-**7. Crie o aruivo inventory.sh**
+**7. Crie o arquivo inventory.sh**
 - Esse script vai pegar o output do terraform e gerar o arquivo de inventory para o ansible.
 ```bash
 terraform output -json | jq -r '
@@ -347,30 +355,30 @@ Você pode criar os arquivos necessários para o Ansible em uma estrutura organi
 Crie os seguintes diretórios e arquivos no seu projeto:
 
 📂 ansible/
-    📂 group_vars/ 
-    📂 host_vars/
-    📂 roles/
-        📂 k8s_environment/
-	        📂 scripts/
-		        📂 devmapper/
-			        📄 create.sh
-			        📄 reload.sh
-				📄 devmapper_reload.service
-            📂 tasks/
-                📄 main.yml
-        📂 k8s_bootstrap/
-	        📂 build/
-		        📄firecraker
-            📂 tasks/
-                📄 main.yml
-        📂 k8s_firecracker/
-            📂 tasks/
-                📄 main.yml
-        📂 apply_kata/
-            📂 tasks/
-                📄 main.yml
-    📄 hosts.yml
-    📄 playbook.yml
+  ├── 📂 group_vars/
+  ├── 📂 host_vars/
+  ├── 📂 roles/
+  │      ├── 📂 k8s_environment/
+  │      │      ├── 📂 scripts/
+  │      │      │      ├── 📂 devmapper/
+  │      │      │      │      ├── 📄 create.sh
+  │      │      │      │      └── 📄 reload.sh
+  │      │      │      └── 📄 devmapper_reload.service
+  │      │      ├── 📂 tasks/
+  │      │      │      └── 📄 main.yml
+  │      ├── 📂 k8s_bootstrap/
+  │      │      ├── 📂 build/
+  │      │      │      └── 📄 firecraker
+  │      │      ├── 📂 tasks/
+  │      │      │      └── 📄 main.yml
+  │      ├── 📂 k8s_firecracker/
+  │      │      ├── 📂 tasks/
+  │      │      │      └── 📄 main.yml
+  │      ├── 📂 apply_kata/
+  │      │      ├── 📂 tasks/
+  │      │      │      └── 📄 main.yml
+  ├── 📄 hosts.yml
+  └── 📄 playbook.yml
 
 **2. Arquivo `hosts.yml`**
 
@@ -814,55 +822,50 @@ Este Makefile automatiza o processo de gerenciamento de infraestrutura com Terra
     Executa todo o pipeline, incluindo `init`, `plan`, `apply`, criação do inventário (`create-inventory`) e a execução do playbook Ansible.
     
 2. **Gerenciamento com Terraform**:
-    
-    - `init`: Inicializa o Terraform.
-    - `plan`: Gera o plano de execução.
-    - `apply`: Aplica as alterações na infraestrutura.
-    - `destroy`: Destroi a infraestrutura provisionada.
-3. **Inventário Dinâmico**:
-    
-    - `create-inventory`: Gera o inventário do Ansible com base na saída do Terraform.
+  - `init`: Inicializa o Terraform.
+  - `plan`: Gera o plano de execução.
+  - `apply`: Aplica as alterações na infraestrutura.
+  - `destroy`: Destroi a infraestrutura provisionada.
+3. **Inventário Dinâmico**:   
+  - `create-inventory`: Gera o inventário do Ansible com base na saída do Terraform.
 4. **Ansible**:
-    
-    - `ansible-lint`: Executa o linter para validar os playbooks.
-    - `ansible-deploy`: Executa o playbook principal (`site.yml`).
+  - `ansible-lint`: Executa o linter para validar os playbooks.
+  - `ansible-deploy`: Executa o playbook principal (`playbook.yml`).
 5. **Linting e Validação de Terraform**:
-    
-    - `terraform-lint`: Valida a formatação e os arquivos de configuração do Terraform.
+  - `terraform-lint`: Valida a formatação e os arquivos de configuração do Terraform.
 6. **Ajuda (`help`)**:  
-    Exibe os alvos disponíveis e um exemplo de uso.
-
+  Exibe os alvos disponíveis e um exemplo de uso.
 ### Teste
 
 1. Crie um manifesto para um nginx 
 2. Adicione **runtimeClassName: kata-fc** em specs.
 
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  creationTimestamp: null
-  labels:
-    run: nginx1
-  name: nginx1
-spec:
-  runtimeClassName: kata-fc
-  containers:
-  - image: nginx
-    name: nginx1
-    resources: {}
-  dnsPolicy: ClusterFirst
-  restartPolicy: Always
-status: {}
-```
+   ```yaml
+   apiVersion: v1
+   kind: Pod
+   metadata:
+     creationTimestamp: null
+     labels:
+       run: nginx1
+     name: nginx1
+   spec:
+     runtimeClassName: kata-fc
+     containers:
+     - image: nginx
+       name: nginx1
+       resources: {}
+     dnsPolicy: ClusterFirst
+     restartPolicy: Always
+   status: {}
+   ```
 
 3. Verifique a versão do kernel do container
-```bash
-$ k exec -it nginx1 -- bash -c "uname -a"
-Linux nginx1 6.1.62 #1 SMP Fri Nov 15 11:22:02 UTC 2024 x86_64 GNU/Linux
-```
+   ```bash
+   $ k exec -it nginx1 -- bash -c "uname -a"
+   Linux nginx1 6.1.62 #1 SMP Fri Nov 15 11:22:02 UTC 2024 x86_64 GNU/Linux
+   ```
 4. E o kernel do host
-```bash
-root@k8s-master-1:~# uname -a
-Linux k8s-master-1 6.8.0-49-generic #49-Ubuntu SMP PREEMPT_DYNAMIC Mon Nov  4 02:06:24 UTC 2024 x86_64 x86_64 x86_64 GNU/Linux
+   ```bash
+   root@k8s-master-1:~# uname -a
+    Linux k8s-master-1 6.8.0-49-generic #49-Ubuntu SMP PREEMPT_DYNAMIC Mon      Nov  4 02:06:24 UTC 2024 x86_64 x86_64 x86_64 GNU/Linux
 ```
